@@ -1,154 +1,142 @@
-locals {
-  zone = "ru-central1-a"
-  nat_image_id = "fd80mrhj8fl2oe87o4e1"
-  public_subnet = ["192.168.10.0/24"]
-  private_subnet = ["192.168.20.0/24"]
-  nat_gw = "192.168.10.254"
+               # Centos 7 image
+
+data "yandex_compute_image" "centos7" {
+  family = "centos-7"
 }
 
-provider "yandex" {
-  token = "AQAAAAAS9j4ZAATuwaB6EWjQVE5PuHLDBOmXiaI"  
-  cloud_id = "b1gm53rrhubfia3qpp2g"
-  folder_id = "b1gg49lefs6j79btf13t"
-  zone = "ru-central1-a"
-}
+               # Создание статического ключа доступа
 
-# AlmaLinux 8 image
-data "yandex_compute_image" "alma8" {
-  family = "almalinux-8"
-}
-
-// Создание статического ключа доступа
 resource "yandex_iam_service_account_static_access_key" "sa-static-key" {
   service_account_id = "ajemtk9h8g4aqcqa9ncv"
   description        = "static access key for object storage"
 }
 
-// Создание бакета с использованием ключа
+               # Создание бакета с использованием ключа
+
 resource "yandex_storage_bucket" "test" {
   access_key = yandex_iam_service_account_static_access_key.sa-static-key.access_key
   secret_key = yandex_iam_service_account_static_access_key.sa-static-key.secret_key
   bucket     = "terraform-bucket-diplom"
 }
 
-resource "yandex_vpc_network" "vpc-diplom" {
-  name = "vpc-diplom"
+        # Создать в vpc сеть с названием master_sub
+
+resource "yandex_vpc_network" "vpc_diplom" {
+  name = "vpc_diplom"
 }
 
-# Создать route table. Добавить статический маршрут, направляющий весь исходящий трафик private сети в NAT-инстанс
-resource "yandex_vpc_route_table" "via-nat" {
-  network_id = yandex_vpc_network.vpc-diplom.id
+              # Создать в vpc subnet с названием master_sub, сетью 192.168.10.0/24.
 
-  static_route {
-    destination_prefix = "0.0.0.0/0"
-    next_hop_address = local.nat_gw
-  }
+resource "yandex_vpc_subnet" "master_sub" {
+  name           = "master_sub"
+  v4_cidr_blocks = ["10.129.0.0/24"]
+  zone           = "ru-central1-a"
+  network_id     = yandex_vpc_network.vpc_diplom.id
 }
 
-# Создать в vpc subnet с названием public, сетью 192.168.10.0/24.
-resource "yandex_vpc_subnet" "public" {
-  v4_cidr_blocks = local.public_subnet
-  zone = local.zone
-  network_id = yandex_vpc_network.vpc-diplom.id
+              # Создать в vpc subnet с названием node_sub, сетью 192.168.20.0/24.
+
+
+resource "yandex_vpc_subnet" "node_sub" {
+  name           = "node_sub"
+  v4_cidr_blocks = ["10.130.0.0/24"]
+  zone           = "ru-central1-b"
+  network_id     = yandex_vpc_network.vpc_diplom.id
 }
 
-# Создать в vpc subnet с названием private, сетью 192.168.20.0/24.
-resource "yandex_vpc_subnet" "private" {
-  v4_cidr_blocks = local.private_subnet
-  zone = local.zone
-  network_id = yandex_vpc_network.vpc-diplom.id
-  route_table_id = yandex_vpc_route_table.via-nat.id
-}
 
-# Создать в этой подсети NAT-инстанс,
-resource "yandex_compute_instance" "nat-instance" {
-  name = "nat-instance"
-  hostname = "nat-instance"
+
+              # Create VMs
+
+
+resource "yandex_compute_instance" "master_vm" {
+  name     = "master"
+  hostname = "master"
 
   resources {
-    cores = 4
+    cores  = 4
     memory = 4
   }
 
   boot_disk {
     initialize_params {
-      # В качестве image_id использовать fd80mrhj8fl2oe87o4e1
-      image_id = local.nat_image_id
+      image_id = data.yandex_compute_image.centos7.id
     }
   }
 
   network_interface {
-    subnet_id = yandex_vpc_subnet.public.id
-    # присвоив ему адрес 192.168.10.254
-    ip_address = local.nat_gw
-    nat = true
+    subnet_id = yandex_vpc_subnet.master_sub.id
+    nat       = true
   }
 
   scheduling_policy {
     preemptible = true
   }
 
-  metadata = {
-    ssh-keys = "evgen:${file("~/.ssh/id_rsa.pub")}"
+  metadata   = {
+    user-data = "${file("/home/evgen/repo/diplom-terraform/metadata.yml")}"
+    serial-port-enable = 1
   }
 }
 
-# Create test VMs
-
-resource "yandex_compute_instance" "test-public-vm" {
-  name = "test-public-vm"
-  hostname = "test-public-vm"
+resource "yandex_compute_instance" "node1_vm" {
+  name     = "node1"
+  hostname = "node1"
+  zone     = "ru-central1-b"
 
   resources {
-    cores = 4
-    memory = 4
+    cores  = 2
+    memory = 2
   }
 
   boot_disk {
     initialize_params {
-      image_id = data.yandex_compute_image.alma8.id
+      image_id = data.yandex_compute_image.centos7.id
     }
   }
 
   network_interface {
-    subnet_id = yandex_vpc_subnet.public.id
-    nat = true
+    subnet_id = yandex_vpc_subnet.node_sub.id
+    nat       = true
   }
 
   scheduling_policy {
     preemptible = true
   }
 
-  metadata = {
-    ssh-keys = "evgen:${file("~/.ssh/id_rsa.pub")}"
+  metadata   = {
+    user-data = "${file("/home/evgen/repo/diplom-terraform/metadata.yml")}"
+    serial-port-enable = 1
   }
 }
 
-
-resource "yandex_compute_instance" "test-private-vm" {
-  name = "test-private-vm"
-  hostname = "test-private-vm"
+resource "yandex_compute_instance" "node2_vm" {
+  name     = "node2"
+  hostname = "node2"
+  zone     = "ru-central1-b"
 
   resources {
-    cores = 4
-    memory = 4
+    cores  = 2
+    memory = 2
   }
 
   boot_disk {
     initialize_params {
-      image_id = data.yandex_compute_image.alma8.id
+      image_id = data.yandex_compute_image.centos7.id
     }
   }
 
   network_interface {
-    subnet_id = yandex_vpc_subnet.private.id
+    subnet_id = yandex_vpc_subnet.node_sub.id
+    nat       = true
   }
 
   scheduling_policy {
     preemptible = true
   }
 
-  metadata = {
-    ssh-keys = "evgen:${file("~/.ssh/id_rsa.pub")}"
+  metadata   = {
+    user-data = "${file("/home/evgen/repo/diplom-terraform/metadata.yml")}"
+    serial-port-enable = 1
   }
 }
