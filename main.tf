@@ -25,7 +25,7 @@ resource "yandex_vpc_network" "vpc_diplom" {
   name = "vpc_diplom"
 }
 
-              # Создать в vpc subnet с названием master_sub, сетью 192.168.10.0/24.
+              # Создать в vpc subnet с названием master_sub, сетью 10.129.0.0/24.
 
 resource "yandex_vpc_subnet" "master_sub" {
   name           = "master_sub"
@@ -34,7 +34,7 @@ resource "yandex_vpc_subnet" "master_sub" {
   network_id     = yandex_vpc_network.vpc_diplom.id
 }
 
-              # Создать в vpc subnet с названием node_sub, сетью 192.168.20.0/24.
+              # Создать в vpc subnet с названием node_sub, сетью 10.130.0.0/24.
 
 
 resource "yandex_vpc_subnet" "node_sub" {
