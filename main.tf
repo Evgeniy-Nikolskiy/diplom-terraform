@@ -140,4 +140,3 @@ resource "yandex_compute_instance" "node2_vm" {
     serial-port-enable = 1
   }
 }
-
