@@ -13,24 +13,20 @@ resource "yandex_iam_service_account_static_access_key" "sa-static-key" {
 
                # Создание бакета с использованием ключа
 
-resource "yandex_storage_bucket" "test" {
-  access_key = "yandex_iam_service_account_static_access_key.sa-static-key.access_key"
-  secret_key = "yandex_iam_service_account_static_access_key.sa-static-key.secret_key"
-  bucket     = "terraform-bucket-diplom"
+# Создание бакета с использованием ключа
 
-  
-  anonymous_access_flags {
-    read = true
-    list = true
-  }
+resource "yandex_storage_bucket" "terraform-bucket-diplom" {
+  access_key = yandex_iam_service_account_static_access_key.sa-static-key.access_key
+  secret_key = yandex_iam_service_account_static_access_key.sa-static-key.secret_key
+  bucket     = "terraform-bucket-diplom"
 }
 
-resource "yandex_storage_object" "test-object" {
-  access_key = "yandex_iam_service_account_static_access_key.sa-static-key.access_key"
-  secret_key = "yandex_iam_service_account_static_access_key.sa-static-key.secret_key"
+resource "yandex_storage_object" "tfstate" {
+  access_key = yandex_iam_service_account_static_access_key.sa-static-key.access_key
+  secret_key = yandex_iam_service_account_static_access_key.sa-static-key.secret_key
   bucket     = "terraform-bucket-diplom"
   key        = "terraform.tfstate"
-  source     = "~/repo/diplom-terraform/"
+  source     = "~/repo/diplom-terraform/terraform.tfstate"
 }
 
         # Создать в vpc сеть с названием master_sub
